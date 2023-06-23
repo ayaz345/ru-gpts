@@ -352,8 +352,9 @@ def get_args():
 
     args.model_parallel_size = min(args.model_parallel_size, args.world_size)
     if args.rank == 0:
-        print('using world size: {} and model-parallel size: {} '.format(
-            args.world_size, args.model_parallel_size))
+        print(
+            f'using world size: {args.world_size} and model-parallel size: {args.model_parallel_size} '
+        )
 
     args.dynamic_loss_scale = False
     if args.loss_scale is None:

@@ -66,7 +66,7 @@ class RuGpt3TextDataset(Dataset):
             for i in range(rnd_shift, len(tokenized_text) - args.block_size + 1, args.block_size):
                 example = tokenized_text[i:i + args.block_size]
                 if None in example:
-                    raise Exception('None in tokens!: ' + filename)
+                    raise Exception(f'None in tokens!: {filename}')
                 if len(example) == args.block_size:
                     examples.append(example)
             # Note that we are loosing the last truncated example here for the sake of simplicity (no padding)
@@ -116,7 +116,7 @@ class RuGpt3TextDataset(Dataset):
         self._cache_dir = os.path.join(file_path, f'{cache_prefix}cache_{args.block_size}_{len(tokenizer)}')
         os.makedirs(self._cache_dir, exist_ok=True)
         if args.overwrite_cache:
-            self.log('Overwrite cache ' + self._cache_dir)
+            self.log(f'Overwrite cache {self._cache_dir}')
 
         examples = []
         iterator = tqdm(files) if args.tqdm else files

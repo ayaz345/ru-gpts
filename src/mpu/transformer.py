@@ -305,10 +305,7 @@ class GPT3ParallelTransformerLayer(torch.nn.Module):
         layernorm_output = self.post_attention_layernorm(layernorm_input)
         # MLP.
         mlp_output = self.mlp(layernorm_output)
-        # Second residual connection.
-        output = layernorm_input + mlp_output
-
-        return output
+        return layernorm_input + mlp_output
 
 
 def unscaled_init_method(sigma):

@@ -57,7 +57,7 @@ def get_model(deepspeed_config_path):
     if deepspeed_sparsity_config is not None:
         logger.info(f"Use sparse attention with mode {sparse_mode}")
     else:
-        logger.info(f"Use dense attention")
+        logger.info("Use dense attention")
     model = GPT3Model(num_layers=24,
                       vocab_size=50264,
                       hidden_size=2048,
@@ -80,7 +80,7 @@ def get_model(deepspeed_config_path):
 
 def setup_model(weights_path, deepspeed_config_path):
     model = get_model(deepspeed_config_path)
-    print("Load checkpoint from " + weights_path)
+    print(f"Load checkpoint from {weights_path}")
     checkpoint = torch.load(weights_path, map_location=lambda storage, loc: storage)['module']
     model.load_state_dict(checkpoint, strict=False)
     model.eval()
@@ -96,10 +96,7 @@ def get_masks_and_position_ids(data,
     batch_size, seq_length = data.size()
 
     # Attention mask (lower triangular).
-    if reset_attention_mask:
-        att_mask_batch = batch_size
-    else:
-        att_mask_batch = 1
+    att_mask_batch = batch_size if reset_attention_mask else 1
     attention_mask = torch.tril(torch.ones(
         (att_mask_batch, seq_length, seq_length), device=data.device)).view(
         att_mask_batch, 1, seq_length, seq_length)
@@ -188,7 +185,7 @@ class RuGPT3XL(PreTrainedModel):
         return cls(model, tokenizer=tokenizer, seq_len=seq_len, model_path=model_name_or_path)
 
     def prepare_inputs_for_generation(self, input_ids: torch.LongTensor, **kwargs):
-        kwargs.update({"input_ids": input_ids})
+        kwargs["input_ids"] = input_ids
         return kwargs
 
     def generate(
@@ -253,10 +250,7 @@ class RuGPT3XL(PreTrainedModel):
         if isinstance(labels, list):
             labels = torch.cuda.LongTensor(labels)
         res = []
-        if labels is not None:
-            lbls = labels
-        else:
-            lbls = [None] * len(input_ids)
+        lbls = labels if labels is not None else [None] * len(input_ids)
         loss = None
         original_context_length = 0
         seq_len = self.seq_len
@@ -264,7 +258,7 @@ class RuGPT3XL(PreTrainedModel):
             context_tokens = tokens.tolist()
             context_length = len(context_tokens)
             original_context_length = len(context_tokens)
-            
+
             while context_length > seq_len:
                 seq_len += 16
             if context_length < seq_len:

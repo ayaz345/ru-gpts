@@ -106,14 +106,18 @@ def nested_detach(tensors):
 
 
 def nested_xla_mesh_reduce(tensors, name):
-    if is_torch_tpu_available():
-        import torch_xla.core.xla_model as xm
-
-        if isinstance(tensors, (list, tuple)):
-            return type(tensors)(nested_xla_mesh_reduce(t, f"{name}_{i}") for i, t in enumerate(tensors))
-        return xm.mesh_reduce(name, tensors, torch.cat)
-    else:
+    if not is_torch_tpu_available():
         raise ImportError("Torch xla must be installed to use `nested_xla_mesh_reduce`")
+    import torch_xla.core.xla_model as xm
+
+    return (
+        type(tensors)(
+            nested_xla_mesh_reduce(t, f"{name}_{i}")
+            for i, t in enumerate(tensors)
+        )
+        if isinstance(tensors, (list, tuple))
+        else xm.mesh_reduce(name, tensors, torch.cat)
+    )
 
 
 def distributed_concat(tensor: "torch.Tensor", num_total_examples: Optional[int] = None) -> torch.Tensor:

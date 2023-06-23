@@ -85,9 +85,10 @@ def get_model(args):
             model = load_huggingface_model(model, args.load_huggingface, args.huggingface_double_pos_embeddings)
 
     if mpu.get_data_parallel_rank() == 0:
-        print(' > number of parameters on model parallel rank {}: {}'.format(
-            mpu.get_model_parallel_rank(),
-            sum([p.nelement() for p in model.parameters()])), flush=True)
+        print(
+            f' > number of parameters on model parallel rank {mpu.get_model_parallel_rank()}: {sum(p.nelement() for p in model.parameters())}',
+            flush=True,
+        )
 
     # To prevent OOM for model sizes that cannot fit in GPU memory in full precision
     if DEEPSPEED_WRAP and args.deepspeed and args.fp16:
@@ -167,15 +168,15 @@ def get_learning_rate_scheduler(optimizer, args):
     num_iters = max(1, num_iters)
     init_step = -1
     warmup_iter = args.warmup * num_iters
-    lr_scheduler = AnnealingLR(optimizer,
-                               start_lr=args.lr,
-                               warmup_iter=warmup_iter,
-                               num_iters=num_iters,
-                               decay_style=args.lr_decay_style,
-                               last_iter=init_step,
-                               min_lr=args.min_lr)
-
-    return lr_scheduler
+    return AnnealingLR(
+        optimizer,
+        start_lr=args.lr,
+        warmup_iter=warmup_iter,
+        num_iters=num_iters,
+        decay_style=args.lr_decay_style,
+        last_iter=init_step,
+        min_lr=args.min_lr,
+    )
 
 
 def setup_model_and_optimizer(args):
@@ -198,7 +199,7 @@ def setup_model_and_optimizer(args):
         )
 
     if args.load is not None:
-        print_rank_0("Load checkpoint from " + args.load)
+        print_rank_0(f"Load checkpoint from {args.load}")
         args.iteration = load_checkpoint(model, optimizer, lr_scheduler, args, deepspeed=DEEPSPEED_WRAP and args.deepspeed)
         print_rank_0("Checkpoint loaded")
     else:
@@ -215,10 +216,7 @@ def get_masks_and_position_ids(data,
     batch_size, seq_length = data.size()
 
     # Attention mask (lower triangular).
-    if reset_attention_mask:
-        att_mask_batch = batch_size
-    else:
-        att_mask_batch = 1
+    att_mask_batch = batch_size if reset_attention_mask else 1
     attention_mask = torch.tril(torch.ones(
         (att_mask_batch, seq_length, seq_length), device=data.device)).view(
         att_mask_batch, 1, seq_length, seq_length)
@@ -330,9 +328,7 @@ def forward_step(sample, model, args, timers, tokenizer=None, iteration=None, tb
     #             print(f"Exception during nan/inf logging: {e}")
 
     loss_mask = loss_mask.view(-1)
-    loss = torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
-
-    return loss
+    return torch.sum(losses.view(-1) * loss_mask) / loss_mask.sum()
 
 
 def backward_step(optimizer, model, lm_loss, args, timers):
@@ -376,13 +372,12 @@ def backward_step(optimizer, model, lm_loss, args, timers):
         if args.fp16:
             optimizer.update_master_grads()
 
-        # Clipping gradients helps prevent the exploding gradient.
         if args.clip_grad > 0:
-            if not args.fp16:
-                mpu.clip_grad_norm(model.parameters(), args.clip_grad)
-            else:
+            if args.fp16:
                 optimizer.clip_master_grads(args.clip_grad)
 
+            else:
+                mpu.clip_grad_norm(model.parameters(), args.clip_grad)
     return lm_loss_reduced
 
 
@@ -490,8 +485,11 @@ def train(model, optimizer, lr_scheduler,
             elapsed_time = timers('interval time').elapsed()
             samples = args.log_interval * mpu.get_data_parallel_world_size() * args.batch_size
             tokens = samples * args.seq_length
-            log_string = ' iteration {:8d}/{:8d} |'.format(iteration, args.train_iters)
-            log_string += ' elapsed time per iteration (ms): {:.1f} |'.format(elapsed_time * 1000.0 / args.log_interval)
+            log_string = ' iteration {:8d}/{:8d} |'.format(
+                iteration, args.train_iters
+            ) + ' elapsed time per iteration (ms): {:.1f} |'.format(
+                elapsed_time * 1000.0 / args.log_interval
+            )
             log_string += ' learning rate {:.3E} |'.format(learning_rate)
             log_string += ' lm loss {:.4f} |'.format(avg_lm_loss)
             log_string += ' perplexity {:.4f} |'.format(ppl)
@@ -526,7 +524,7 @@ def train(model, optimizer, lr_scheduler,
                 log_memory_usage(tb_writer, iteration)
             total_lm_loss = 0.0
             if report_memory_flag:
-                report_memory('after {} iterations'.format(iteration))
+                report_memory(f'after {iteration} iterations')
                 report_memory_flag = False
             if USE_TORCH_DDP:
                 timers.log(['forward', 'backward', 'optimizer', 'data loader'], normalizer=args.log_interval)
@@ -539,7 +537,7 @@ def train(model, optimizer, lr_scheduler,
 
         # Evaluation
         if args.eval_interval and iteration % args.eval_interval == 0 and args.do_valid:
-            prefix = 'iteration {}'.format(iteration)
+            prefix = f'iteration {iteration}'
             val_loss, val_ppl = evaluate_and_print_results(
                 prefix, iter(val_data) if val_data else None, model, args, timers, False)
             if torch.distributed.is_initialized() and torch.distributed.get_rank() == 0:
@@ -551,8 +549,10 @@ def train(model, optimizer, lr_scheduler,
             torch.distributed.barrier()
             time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             rank = torch.distributed.get_rank()
-            print('rank: {} | time: {} | exiting the program at iteration {}'.
-                  format(rank, time_str, iteration), flush=True)
+            print(
+                f'rank: {rank} | time: {time_str} | exiting the program at iteration {iteration}',
+                flush=True,
+            )
             exit()
 
     return iteration, skipped_iters
@@ -573,7 +573,7 @@ def evaluate(data_iterator, model, args, timers, verbose=False):
         while iteration < eval_len:
             iteration += 1
             if verbose and iteration % args.log_interval == 0:
-                print_rank_0('Evaluating iter {}/{}'.format(iteration, eval_len))
+                print_rank_0(f'Evaluating iter {iteration}/{eval_len}')
             # Forward evaluation.
             sample = next(data_iterator) if (data_iterator is not None) else None
             lm_loss = forward_step(sample, model, args, timers)
@@ -603,11 +603,12 @@ def evaluate_and_print_results(prefix, data_iterator, model,
                                args, timers, verbose=False):
     """Helper function to evaluate and dump results on screen."""
     if args.load_tag:
-        prefix = 'checkpoint {}'.format(args.load_tag)
+        prefix = f'checkpoint {args.load_tag}'
     lm_loss = evaluate(data_iterator, model, args, timers, verbose)
     lm_ppl = math.exp(min(20, lm_loss))
-    string = ' validation loss at {} | '.format(prefix)
-    string += 'LM loss: {:.4f} | '.format(lm_loss)
+    string = f' validation loss at {prefix} | ' + 'LM loss: {:.4f} | '.format(
+        lm_loss
+    )
     string += 'LM PPL: {:.3f}'.format(lm_ppl)
     length = len(string) + 1
     print_rank_0('-' * length)
@@ -653,7 +654,7 @@ def initialize_distributed(args):
     init_method = 'tcp://'
     master_ip = os.getenv('MASTER_ADDR', 'localhost')
     master_port = os.getenv('MASTER_PORT', '6000')
-    init_method += master_ip + ':' + master_port
+    init_method += f'{master_ip}:{master_port}'
     torch.distributed.init_process_group(
         backend=args.distributed_backend,
         world_size=args.world_size, rank=args.rank,
@@ -692,8 +693,9 @@ def get_train_val_test_data(args):
         while (after % multiple) != 0:
             after += 1
         print_rank_0(
-            '> padded vocab (size: {}) with {} dummy tokens (new size: {})'.format(before, after - before, after))
-        print_rank_0('> end-of-document token: {}'.format(eod_token))
+            f'> padded vocab (size: {before}) with {after - before} dummy tokens (new size: {after})'
+        )
+        print_rank_0(f'> end-of-document token: {eod_token}')
         token_counts = torch.cuda.LongTensor(
             [after, eod_token, int(args.do_train), int(args.do_valid), int(args.do_test)])
     else:
@@ -800,11 +802,7 @@ def main():
         if val_data is not None:
             start_iter_val = (args.train_iters // args.save_interval) * args.eval_interval
             val_data.batch_sampler.start_iter = start_iter_val % len(val_data)
-    if train_data is not None:
-        train_data_iterator = iter(train_data)
-    else:
-        train_data_iterator = None
-
+    train_data_iterator = iter(train_data) if train_data is not None else None
     iteration = 0
     if args.train_iters > 0:
         if args.do_train:
