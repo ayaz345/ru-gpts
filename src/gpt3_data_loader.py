@@ -71,7 +71,7 @@ def make_gpt3_dataloaders(args):
     tokenizer_path = args.load_huggingface if args.load_huggingface else \
         (args.tokenizer_path if args.tokenizer_path else os.path.join(os.path.dirname(args.train_data_path),
                                                                       '_tokenizer/'))
-    print_rank_0('Load tokenizer from ' + tokenizer_path)
+    print_rank_0(f'Load tokenizer from {tokenizer_path}')
     tokenizer = GPT2Tokenizer.from_pretrained(tokenizer_path)
     eod_token = tokenizer.encoder['<pad>']
     num_tokens = len(tokenizer)

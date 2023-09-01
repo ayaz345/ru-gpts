@@ -23,10 +23,7 @@ def download_file_from_hf(pretrained_model_name_or_path: str, file_name: str) ->
                 archive_file = os.path.join(pretrained_model_name_or_path, file_name)
             else:
                 raise EnvironmentError(
-                    "Error no file named {} found in directory {}".format(
-                        file_name,
-                        pretrained_model_name_or_path,
-                    )
+                    f"Error no file named {file_name} found in directory {pretrained_model_name_or_path}"
                 )
         elif os.path.isfile(pretrained_model_name_or_path) or is_remote_url(pretrained_model_name_or_path):
             archive_file = pretrained_model_name_or_path
@@ -60,9 +57,11 @@ def download_file_from_hf(pretrained_model_name_or_path: str, file_name: str) ->
             raise EnvironmentError(msg)
 
         if resolved_archive_file == archive_file:
-            logger.info("loading weights file {}".format(archive_file))
+            logger.info(f"loading weights file {archive_file}")
         else:
-            logger.info("loading weights file {} from cache at {}".format(archive_file, resolved_archive_file))
+            logger.info(
+                f"loading weights file {archive_file} from cache at {resolved_archive_file}"
+            )
     else:
         resolved_archive_file = None
 

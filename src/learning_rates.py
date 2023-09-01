@@ -43,21 +43,20 @@ class AnnealingLR(_LRScheduler):
         # https://openreview.net/pdf?id=BJYwwY9ll pg. 4
         if self.warmup_iter > 0 and self.num_iters <= self.warmup_iter:
             new_lr = float(self.start_lr) * self.num_iters / self.warmup_iter
+        elif self.decay_style == self.DECAY_STYLES[0]:
+            lr = self.start_lr * ((self.end_iter - (self.num_iters - self.warmup_iter)) / self.end_iter)
+            new_lr = max(self.min_lr, lr)
+        elif self.decay_style == self.DECAY_STYLES[1]:
+            new_lr = self.start_lr / 2.0 * (
+                        math.cos(math.pi * (self.num_iters - self.warmup_iter) / self.end_iter) + 1)
+            if new_lr <= self.min_lr or self._min_reached or self.num_iters > self.end_iter:
+                self._min_reached = True
+                new_lr = self.min_lr
+        elif self.decay_style == self.DECAY_STYLES[2]:
+            # TODO: implement exponential decay
+            new_lr = self.start_lr
         else:
-            if self.decay_style == self.DECAY_STYLES[0]:
-                lr = self.start_lr * ((self.end_iter - (self.num_iters - self.warmup_iter)) / self.end_iter)
-                new_lr = max(self.min_lr, lr)
-            elif self.decay_style == self.DECAY_STYLES[1]:
-                new_lr = self.start_lr / 2.0 * (
-                            math.cos(math.pi * (self.num_iters - self.warmup_iter) / self.end_iter) + 1)
-                if new_lr <= self.min_lr or self._min_reached or self.num_iters > self.end_iter:
-                    self._min_reached = True
-                    new_lr = self.min_lr
-            elif self.decay_style == self.DECAY_STYLES[2]:
-                # TODO: implement exponential decay
-                new_lr = self.start_lr
-            else:
-                new_lr = self.start_lr
+            new_lr = self.start_lr
         self._last_lr = new_lr
         return new_lr
 
@@ -70,14 +69,13 @@ class AnnealingLR(_LRScheduler):
             group['lr'] = new_lr
 
     def state_dict(self):
-        sd = {
+        return {
             'start_lr': self.start_lr,
             'warmup_iter': self.warmup_iter,
             'num_iters': self.num_iters,
             'decay_style': self.decay_style,
-            'end_iter': self.end_iter
+            'end_iter': self.end_iter,
         }
-        return sd
 
     def load_state_dict(self, sd):
         self.start_lr = sd['start_lr']

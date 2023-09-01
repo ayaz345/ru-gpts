@@ -51,9 +51,10 @@ def get_model(args):
                       parallel_output=False)
 
     if mpu.get_data_parallel_rank() == 0:
-        print(' > number of parameters on model parallel rank {}: {}'.format(
-            mpu.get_model_parallel_rank(),
-            sum([p.nelement() for p in model.parameters()])), flush=True)
+        print(
+            f' > number of parameters on model parallel rank {mpu.get_model_parallel_rank()}: {sum(p.nelement() for p in model.parameters())}',
+            flush=True,
+        )
 
     # GPU allocation.
     model.cuda(torch.cuda.current_device())
@@ -84,7 +85,7 @@ def setup_model(args):
             dist_init_required=False
         )
 
-    print("Load checkpoint from " + args.load)
+    print(f"Load checkpoint from {args.load}")
     _ = load_checkpoint(model, None, None, args, deepspeed=DEEPSPEED_WRAP and args.deepspeed)
     model.eval()
     print("Loaded")
